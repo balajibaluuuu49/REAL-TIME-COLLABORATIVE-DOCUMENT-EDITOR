@@ -1,0 +1,304 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Users, Share2, Save, FileText, Eye, Edit3, Clock, User } from 'lucide-react';
+
+const CollaborativeEditor = () => {
+  const [document, setDocument] = useState({
+    title: 'Untitled Document',
+    content: 'Start typing your document here...',
+    lastSaved: new Date(),
+    collaborators: [
+      { id: 1, name: 'You', color: '#3B82F6', cursor: 0, active: true },
+      { id: 2, name: 'Sarah Chen', color: '#EF4444', cursor: 145, active: true },
+      { id: 3, name: 'Mike Johnson', color: '#10B981', cursor: 89, active: false }
+    ]
+  });
+
+  const [isTyping, setIsTyping] = useState(false);
+  const [savedStatus, setSavedStatus] = useState('saved');
+  const [showCollaborators, setShowCollaborators] = useState(true);
+  const [viewMode, setViewMode] = useState('edit'); // 'edit' or 'preview'
+  const [cursorPosition, setCursorPosition] = useState(0);
+  const contentRef = useRef(null);
+
+  // Simulate auto-save functionality
+  useEffect(() => {
+    if (isTyping) {
+      setSavedStatus('saving...');
+      const saveTimer = setTimeout(() => {
+        setSavedStatus('saved');
+        setDocument(prev => ({ ...prev, lastSaved: new Date() }));
+      }, 1000);
+      return () => clearTimeout(saveTimer);
+    }
+  }, [document.content, isTyping]);
+
+  // Simulate collaborative cursors
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDocument(prev => ({
+        ...prev,
+        collaborators: prev.collaborators.map(collab => ({
+          ...collab,
+          cursor: collab.active && collab.id !== 1 
+            ? Math.max(0, collab.cursor + Math.floor(Math.random() * 10 - 5))
+            : collab.cursor
+        }))
+      }));
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleContentChange = (e) => {
+    const newContent = e.target.value;
+    setDocument(prev => ({ ...prev, content: newContent }));
+    setIsTyping(true);
+    setCursorPosition(e.target.selectionStart);
+    
+    // Reset typing indicator
+    setTimeout(() => setIsTyping(false), 1000);
+  };
+
+  const handleTitleChange = (e) => {
+    setDocument(prev => ({ ...prev, title: e.target.value }));
+    setIsTyping(true);
+  };
+
+  const formatTime = (date) => {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const getCollaboratorCursor = (position, content) => {
+    if (viewMode === 'preview') return null;
+    
+    const lines = content.substring(0, position).split('\n');
+    const lineNumber = lines.length;
+    const charInLine = lines[lines.length - 1].length;
+    
+    return { line: lineNumber, char: charInLine };
+  };
+
+  const renderContent = () => {
+    if (viewMode === 'preview') {
+      return (
+        <div className="prose max-w-none p-6 min-h-96 bg-white rounded-lg border">
+          <h1 className="text-2xl font-bold mb-4">{document.title}</h1>
+          <div className="whitespace-pre-wrap">{document.content}</div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="relative">
+        <textarea
+          ref={contentRef}
+          value={document.content}
+          onChange={handleContentChange}
+          className="w-full min-h-96 p-6 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm leading-relaxed"
+          placeholder="Start typing your document..."
+        />
+        
+        {/* Collaborative cursors */}
+        {document.collaborators
+          .filter(c => c.active && c.id !== 1)
+          .map(collaborator => {
+            const cursor = getCollaboratorCursor(collaborator.cursor, document.content);
+            if (!cursor) return null;
+            
+            return (
+              <div
+                key={collaborator.id}
+                className="absolute pointer-events-none"
+                style={{
+                  top: `${20 + cursor.line * 20}px`,
+                  left: `${24 + cursor.char * 7}px`,
+                }}
+              >
+                <div 
+                  className="w-0.5 h-5 animate-pulse"
+                  style={{ backgroundColor: collaborator.color }}
+                />
+                <div 
+                  className="text-xs px-2 py-1 rounded text-white whitespace-nowrap mt-1"
+                  style={{ backgroundColor: collaborator.color }}
+                >
+                  {collaborator.name}
+                </div>
+              </div>
+            );
+          })}
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-6xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <FileText className="w-6 h-6 text-blue-600" />
+                <input
+                  type="text"
+                  value={document.title}
+                  onChange={handleTitleChange}
+                  className="text-lg font-medium bg-transparent border-none focus:outline-none focus:bg-gray-50 px-2 py-1 rounded"
+                />
+              </div>
+              
+              <div className="flex items-center space-x-2 text-sm text-gray-500">
+                <Clock className="w-4 h-4" />
+                <span>{savedStatus}</span>
+                {savedStatus === 'saved' && (
+                  <span>• Last saved {formatTime(document.lastSaved)}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              {/* View Mode Toggle */}
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('edit')}
+                  className={`px-3 py-1 rounded text-sm flex items-center space-x-1 transition-colors ${
+                    viewMode === 'edit' 
+                      ? 'bg-white text-blue-600 shadow-sm' 
+                      : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>Edit</span>
+                </button>
+                <button
+                  onClick={() => setViewMode('preview')}
+                  className={`px-3 py-1 rounded text-sm flex items-center space-x-1 transition-colors ${
+                    viewMode === 'preview' 
+                      ? 'bg-white text-blue-600 shadow-sm' 
+                      : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                >
+                  <Eye className="w-4 h-4" />
+                  <span>Preview</span>
+                </button>
+              </div>
+
+              {/* Collaborators */}
+              <button
+                onClick={() => setShowCollaborators(!showCollaborators)}
+                className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Users className="w-4 h-4" />
+                <span>{document.collaborators.filter(c => c.active).length}</span>
+              </button>
+
+              <button className="flex items-center space-x-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                <Share2 className="w-4 h-4" />
+                <span>Share</span>
+              </button>
+
+              <button className="flex items-center space-x-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                <Save className="w-4 h-4" />
+                <span>Save</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        <div className="flex gap-6">
+          {/* Document Editor */}
+          <div className="flex-1">
+            <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+              {viewMode === 'edit' && (
+                <div className="px-6 py-3 bg-gray-50 border-b">
+                  <input
+                    type="text"
+                    value={document.title}
+                    onChange={handleTitleChange}
+                    className="w-full text-xl font-bold bg-transparent border-none focus:outline-none"
+                    placeholder="Document Title"
+                  />
+                </div>
+              )}
+              
+              {renderContent()}
+            </div>
+
+            {/* Status Bar */}
+            <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
+              <div className="flex items-center space-x-4">
+                <span>{document.content.length} characters</span>
+                <span>{document.content.split(/\s+/).filter(word => word.length > 0).length} words</span>
+                {viewMode === 'edit' && (
+                  <span>Cursor: {cursorPosition}</span>
+                )}
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                {isTyping && (
+                  <div className="flex items-center space-x-1">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                    <span>Typing...</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Collaborators Panel */}
+          {showCollaborators && (
+            <div className="w-72 bg-white rounded-xl shadow-sm border p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
+                <Users className="w-5 h-5" />
+                <span>Collaborators</span>
+              </h3>
+              
+              <div className="space-y-3">
+                {document.collaborators.map(collaborator => (
+                  <div key={collaborator.id} className="flex items-center space-x-3">
+                    <div 
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium"
+                      style={{ backgroundColor: collaborator.color }}
+                    >
+                      <User className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">{collaborator.name}</div>
+                      <div className="text-xs text-gray-500 flex items-center space-x-2">
+                        <div 
+                          className={`w-2 h-2 rounded-full ${
+                            collaborator.active ? 'bg-green-500' : 'bg-gray-400'
+                          }`}
+                        />
+                        <span>{collaborator.active ? 'Active' : 'Away'}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button className="w-full mt-6 px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-300 hover:text-blue-600 transition-colors">
+                + Invite collaborators
+              </button>
+
+              {/* Recent Activity */}
+              <div className="mt-6">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">Recent Activity</h4>
+                <div className="space-y-2 text-xs text-gray-500">
+                  <div>Sarah made changes • 2 min ago</div>
+                  <div>Mike joined the document • 5 min ago</div>
+                  <div>You created the document • 1 hour ago</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default CollaborativeEditor;
